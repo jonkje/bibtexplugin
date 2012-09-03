@@ -273,13 +273,13 @@ function BibtexDisplay() {
 	var old = o.find("*");
 	
 	for (var item in e) {
-	    var tpl = $(".bibtex_template").clone().removeClass('bibtex_template');
+	    var tpl = jQuery(".bibtex_template").clone().removeClass('bibtex_template');
 	    tpl.addClass("unused");
 	    
 	    for (var key in e[item]) {
 		var fields = tpl.find("." + key.toLowerCase());
 		for (var i = 0; i < fields.size(); i++) {
-		    var f = $(fields[i]);
+		    var f = jQuery(fields[i]);
 		    f.removeClass("unused");
 		    var value = this.fixValue(e[item][key]);
 		    if (f.is("a")) {
@@ -311,7 +311,6 @@ function BibtexDisplay() {
 	old.remove();
     }
 
-
     this.displayBibtex = function(input, output) {
 	// parse bibtex input
 	var b = new BibtexParser();
@@ -333,7 +332,7 @@ function BibtexDisplay() {
 	    }
 
 	    // find template
-	    var tpl = $(".bibtex_template").clone().removeClass('bibtex_template');
+	    var tpl = jQuery(".bibtex_template").clone().removeClass('bibtex_template');
 
 
 	    // find all ifs and check them
@@ -350,7 +349,7 @@ function BibtexDisplay() {
 		cond.removeClass("if");
 		var ifTrue = true;
 		var classList = cond.attr('class').split(' ');
-		$.each( classList, function(index, cls){
+		jQuery.each( classList, function(index, cls){
 		    if(keys.indexOf(cls.toUpperCase()) < 0) {
 			ifTrue = false;
 		    }
@@ -381,8 +380,8 @@ function BibtexDisplay() {
 }
 
 function bibtex_js_draw() {
-    $(".bibtex_template").hide();
-    (new BibtexDisplay()).displayBibtex($("#bibtex_input").val(), $("#bibtex_display"));
+    jQuery(".bibtex_template").hide();
+    (new BibtexDisplay()).displayBibtex(jQuery("#bibtex_input").val(), jQuery("#bibtex_display"));
 }
 console.log("bibtex_js_draw() now defined\n\n")
 
@@ -393,13 +392,13 @@ if (typeof jQuery == 'undefined') {
     alert("Please include jquery in all pages using bibtex_js!");
 } else {
     // draw bibtex when loaded
-    $(document).ready(function () {
+    jQuery(document).ready(function () {
 	// check for template, add default
-	if ($(".bibtex_template").size() == 0) {
+	if (jQuery(".bibtex_template").size() == 0) {
 	    console.log("No bibtex_template found, adding default")
-	    $("body").append("<div class=\"bibtex_template\"><div class=\"if author\" style=\"font-weight: bold;\">\n  <span class=\"if year\">\n    <span class=\"year\"></span>, \n  </span>\n  <span class=\"author\"></span>\n  <span class=\"if url\" style=\"margin-left: 20px\">\n    <a class=\"url\" style=\"color:black; font-size:10px\">(view online)</a>\n  </span>\n</div>\n<div style=\"margin-left: 10px; margin-bottom:5px;\">\n  <span class=\"title\"></span>\n</div></div>");
+	    jQuery("body").append("<div class=\"bibtex_template\"><div class=\"if author\" style=\"font-weight: bold;\">\n  <span class=\"if year\">\n    <span class=\"year\"></span>, \n  </span>\n  <span class=\"author\"></span>\n  <span class=\"if url\" style=\"margin-left: 20px\">\n    <a class=\"url\" style=\"color:black; font-size:10px\">(view online)</a>\n  </span>\n</div>\n<div style=\"margin-left: 10px; margin-bottom:5px;\">\n  <span class=\"title\"></span>\n</div></div>");
 	} else {
-	    console.log("Found "+$(".bibtex_template").size()+" bibtex_template")
+	    console.log("Found "+jQuery(".bibtex_template").size()+" bibtex_template")
 	}
 
 	bibtex_js_draw();
