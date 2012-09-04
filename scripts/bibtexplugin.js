@@ -17,19 +17,13 @@
 		"a.bibtexbox span {",
 		"  display: none;",
 		"  position: absolute;",
-		"  left: 0px;",
+		"  z-index: 1000;",
+		"  left: -100%;",
 		"  width: 300%;",
 		"  padding: 5px;",
 		"  border:1px solid [[ColorPalette::SecondaryMid]];",
 		"  background: [[ColorPalette::SecondaryLight]];",
 		"  color:[[ColorPalette::Foreground]]; }" ].join("")
-//		"a.bibtexbox:hover {",
-//		"  display: inline;}\n",
-//		"a.bibtexbox:hover span {",
-//		"  display: block;",
-//		"  border:1px solid [[ColorPalette::SecondaryMid]];",
-//		"  background: [[ColorPalette::SecondaryLight]];",
-//		"  color:[[ColorPalette::Foreground]]; }" ].join("")
 var cssname = "StyleSheetBibTeXPlugin"
 config.shadowTiddlers[cssname] = "/*{{{*/\n%0\n/*}}}*/".format(stylesheet);
 store.addNotification(cssname, refreshStyles);
@@ -464,17 +458,13 @@ config.macros.bibtex = {
 
 config.macros.bibliography = {}
 config.macros.bibliography.handler = function(place, macroName, params) {
-/*    createTiddlyElement(place, "div", "bibtex_display", null, null)
-    if(typeof bibtex_js_draw == "undefined") {
-	console.log("No bibtex_js_draw() yet; trying again in 5 seconds.\n\n")
-	setTimeout(function() {
-	    if(typeof bibtex_js_draw != "undefined") {
-		bibtex_js_draw()
-	    } else {
-		console.log("no bibtex_js_draw() yet\n\n")
-	    }
-	}, 2000)
-    } else {
-	bibtex_js_draw()
-    }*/
+    var tiddlystr = ""
+    for(var k in bibtexparser.entries) {
+	var entry = bibtexparser.entries[k]
+	if(entry["KEY"] !== undefined) {
+	    tiddlystr += ";" + entry["KEY"] + "\n"
+	    tiddlystr += ":{{bibtexdummycss{" + template.tiddlyfy(entry) + "}}}\n"
+	}
+    }
+    wikify(tiddlystr, place)
 }
