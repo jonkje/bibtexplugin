@@ -1,38 +1,17 @@
 /***
-|''name''         | BibTeXPlugin |
-|''Description''  | Allows references to external BibTeX file |
-|''Version''      | alpha0 |
-|''Date''         | the future |
-|''Source''       | right here! |
-|''Author''       | Jon Øyvind Kjellman |
-|''License''      | MIT/BSD don't know yet |
-|''~CoreVersion'' | 2.5.0 |
-|''Browser''      | Opera |
+    |''name''         | BibTeXPlugin |
+    |''Description''  |  |
+    |''Version''      | alpha0 |
+    |''Date''         | the future |
+    |''Source''       | right here! |
+    |''Author''       | Jon Øyvind Kjellman |
+    |''License''      | MIT/BSD don't know yet |
+    |''~CoreVersion'' | 2.5.0 |
+    |''Browser''      | Opera 11.61+ |
 ***/
 
-// Create stylesheet (see:
-// http://tiddlywiki.org/#%5B%5BBundling%20CSS%20in%20plugins%5D%5D
-// for release modifications)
- stylesheet = [ "a.bibtexbox { position: relative; }\n",
-		"a.bibtexbox span {",
-		"  display: none;",
-		"  position: absolute;",
-		"  z-index: 1000;",
-		"  left: -100%;",
-		"  width: 300%;",
-		"  padding: 5px;",
-		"  border:1px solid [[ColorPalette::SecondaryMid]];",
-		"  background: [[ColorPalette::SecondaryLight]];",
-		"  color:[[ColorPalette::Foreground]]; }" ].join("")
-var cssname = "StyleSheetBibTeXPlugin"
-config.shadowTiddlers[cssname] = "/*{{{*/\n%0\n/*}}}*/".format(stylesheet);
-store.addNotification(cssname, refreshStyles);
-
-// Load bibliography from external file
-//var bibfile = "../../../artikler/database.bib";
-var bibfilename = "testdb.bib";
-var bibfile = ""
-jQuery.ajax({url: bibfilename, success: function(data) { bibfile = data; }, async: false })
+// Plugin namespace
+var plugin = config.extensions.BibTeXPlugin = {}
 
 // BibTeX parser code. Originally written and published by ??? as bibtex_js.
 // Issues:
@@ -52,7 +31,7 @@ jQuery.ajax({url: bibfilename, success: function(data) { bibfile = data; }, asyn
 //  value_comment -> .*? // or something??
 //  value_quotes -> '"' .*? '"'; // not quite
 //  value_braces -> '{' .*? '"'; // not quite
-function BibtexParser() {
+plugin.BibtexParser = function () {
     this.pos = 0;
     this.input = "";
     
@@ -212,7 +191,7 @@ function BibtexParser() {
 	if (this.tryMatch("=")) {
 	    this.match("=");
 	    var val = this.value();
-//	    console.log("Parsed key/value pair: "+key+" = "+val)
+	    //	    console.log("Parsed key/value pair: "+key+" = "+val)
 	    return [ key, val ];
 	} else {
 	    throw "... = value expected, equals sign missing:" + this.input.substring(this.pos);
@@ -281,9 +260,7 @@ function BibtexParser() {
     }
 }
 
-function Template(template_tiddler) {
-    this.template_tiddler = template_tiddler
-
+plugin.Template = function(template_str) {
     this.StringElement = function(str, next) {
 	this.str  = typeof str  === undefined ? "" : str
 	this.next = typeof next === undefined ? null : next
@@ -301,7 +278,7 @@ function Template(template_tiddler) {
     }
 
     this.isEscaped = function(str, pos) {
-//	console.log("isEscaped(\"" + str.substring(0, pos+1) + "\", " + pos + ")")
+	//	console.log("isEscaped(\"" + str.substring(0, pos+1) + "\", " + pos + ")")
 	var slashcount = 0
 	while(--pos >= 0) {
 	    if(str[pos] == '\\') {
@@ -317,12 +294,12 @@ function Template(template_tiddler) {
     // elements (Key, String and/or Conditional) with the last
     // element(s) linking to tail.
     this.parseString = function(str, tail) {
-//	console.log("\nparsing string: " + str)
+	//	console.log("\nparsing string: " + str)
 	var prefix = null
-
+	
 	// For proper handling of empty strings in conditionals.
 	if(str === "" && tail !== null) { return new this.StringElement("", tail) }
-
+	
 	// Prefix string
 	for(var parsepos = 0; true; parsepos++) {
 	    if(str[parsepos] == '$' && str[parsepos+1] == '{' && !this.isEscaped(str, parsepos)) {
@@ -331,7 +308,7 @@ function Template(template_tiddler) {
 		}
 		break
 	    }
-
+	    
 	    // End of string, it must be a pure text string!
 	    if(parsepos >= str.length-3) { return new this.StringElement(str, tail) }
 	}
@@ -343,7 +320,7 @@ function Template(template_tiddler) {
 	var bracketcnt = 1
 	var startpos   = parsepos
 	var endpos     = 0
-
+	
 	// Find commas and end of statement
 	for(; parsepos < str.length; parsepos++) {
 	    if(str[parsepos] == '{' && !this.isEscaped(str, parsepos)) {
@@ -361,10 +338,10 @@ function Template(template_tiddler) {
 		}
 	    }
 	}
-
+	
 	// Check that the element is complete.
 	if(bracketcnt != 0) { return new this.StringElement("Template parse error! (Unmatched bracket)", tail) }
-
+	
 	// Parse tail of current string
 	var innertail = this.parseString(str.substring(endpos+1), tail)
 	
@@ -386,7 +363,7 @@ function Template(template_tiddler) {
 	    first_element = new this.ConditionalElement(str.substring(startpos, commapos[0]).toUpperCase(),
 							cond_element1, cond_element2)
 	}
-
+	
 	if(prefix == null) {
 	    return first_element
 	} else {
@@ -394,33 +371,33 @@ function Template(template_tiddler) {
 	    return prefix
 	}
     }
-
+    
     this.template_head = null
-
-    this.parseTemplate = function() {
-	// Load template tiddler contents
-	var template_str  = [ "''${TITLE}''\n${YEAR},''${AUTHOR}'',//${JOURNAL,${JOURNAL}\\,,${PUBLISHER}}//",
-			      "${VOLUME,vol. ${VOLUME}} ${URL,([[online version|${URL}]])}" ].join("")
-
+    
+    this.parseTemplate = function(template_str) {	
 	this.template_head = this.parseString(template_str, null)
 	if(this.template_head === null) {
 	    this.template_head = new this.StringElement("")
 	}
     }
-
-    this.parseTemplate()
+    
+    this.parseTemplate(template_str)
 }
 
-Template.prototype.tiddlyfy = function(entry) {
+plugin.Template.prototype.tiddlyfy = function(entry) {
     var rtrn_str = ""
     var e = this.template_head
     do {
 	if(e instanceof this.StringElement) {
-	    rtrn_str += e.str;
+	    rtrn_str += e.str
 	    e = e.next
 	} else if(e instanceof this.KeyElement) {
 	    var val = entry[e.key]
-	    rtrn_str += val !== undefined ? val : ""
+	    if(e.key === "URL") {
+		rtrn_str += val
+	    } else {
+		rtrn_str += val !== undefined ? val:""//"\"\"\"" + val + "\"\"\"" : ""
+	    }
 	    e = e.next
 	} else if(e instanceof this.ConditionalElement) {
 	    var val = entry[e.condition]
@@ -431,40 +408,78 @@ Template.prototype.tiddlyfy = function(entry) {
     return rtrn_str
 }
 
-var bibtexparser = new BibtexParser()
-bibtexparser.setInput(bibfile)
-bibtexparser.bibtex()
-var template     = new Template(null)
+plugin.loadBibliography = function(caller) {
+    console.log("plugin.loadBibliography called by: " + caller)
+    // Load bibliography from external file
+    var bibfilename = store.getTiddlerText("BibTeXPluginFilename");
+    var bibdata = ""
+    if(bibfilename !== "") {
+	jQuery.ajax({url: bibfilename,
+		     success: function(data) { bibdata = data; },
+		     async: false })
+    } else {
+	bibdata = store.getTiddlerText("BibTeXPluginBibliography")
+    }
+    
+    plugin.bibtexparser = new plugin.BibtexParser()
+    plugin.bibtexparser.setInput(bibdata)
+    plugin.bibtexparser.bibtex()
+    plugin.template     = new plugin.Template([ "''${TITLE}''\n${YEAR},''${AUTHOR}'',//${JOURNAL,${JOURNAL}\\,,${PUBLISHER}}//",
+					      "${VOLUME,vol. ${VOLUME}} ${URL,([[online version|${URL}]])}" ].join(""))
+}
 
+// Set-up shadow tiddlers
+// Create stylesheet (see:
+// http://tiddlywiki.org/#%5B%5BBundling%20CSS%20in%20plugins%5D%5D
+// for release modifications)
+plugin.stylesheet = [ "a.bibtexbox { position: relative; }\n",
+		      "a.bibtexbox span {",
+		      "  display: none;",
+		      "  position: absolute;",
+		      "  z-index: 1000;",
+		      "  left: -100%;",
+		      "  width: 300%;",
+		      "  padding: 5px;",
+		      "  border:1px solid [[ColorPalette::SecondaryMid]];",
+		      "  background: [[ColorPalette::SecondaryLight]];",
+		      "  color:[[ColorPalette::Foreground]]; }" ].join("")
+config.shadowTiddlers["BibTeXPluginStyleSheet"] = "/*{{{*/\n%0\n/*}}}*/".format(plugin.stylesheet)
+store.addNotification("BibTeXPluginStyleSheet", refreshStyles)
+
+// Load BibTeX file/content from (shadow) tiddlers. The notification
+// callbacks will get called once for each of the two tiddlers,
+// causing the data to be loaded.
+config.shadowTiddlers["BibTeXPluginFilename"] = ""
+store.addNotification("BibTeXPluginFilename", plugin.loadBibliography)
+config.shadowTiddlers["BibTeXPluginBibliography"] = ""
+store.addNotification("BibTeXPluginBibliography", plugin.loadBibliography)
+
+// Define macros 'bibtex' and 'bibliography'                
 config.macros.bibtex = {
     handler: function(place, macroName, params) {
-	var entry = bibtexparser.entries[params[0].toUpperCase()]
-	console.log("Tiddlyfying entry: " + params[0])
-	var tiddlystr = template.tiddlyfy(entry)
-	console.log("Tiddlyfyingresult = " + tiddlystr)
-
+	console.log("Executing macro bibtex")
+	var entry = plugin.bibtexparser.entries[params[0].toUpperCase()]
+	var tiddlystr = entry !== undefined ? plugin.template.tiddlyfy(entry) : "No such entry in bibliography!"
 	var citea     = createTiddlyElement(place, "a", null, "bibtexbox", "("+params[0]+")")
 	var citespan  = createTiddlyElement(citea, "span")
-/*	var citeclose = createTiddlyElement(citespan, "div", null, "messageToolabar")
-	createTiddlyButton(citeclose, config.messages.messageClose.text, config.messages.messageClose.tooltip,
-			   function() { citespan.style.display = "none" })*/
 	wikify(tiddlystr, citespan)
-	
-	citea.onclick = function() {
-	    citespan.style.display = citespan.style.display !== "block" ? "block" : "none"
-	}
+	console.log("tiddlystr: " + tiddlystr)
+
+	citea.onclick = function() { citespan.style.display = citespan.style.display !== "block" ? "block" : "none" }
+	citespan.onclick = function() { citespan.style.display = "none" }
     }
 }
 
-config.macros.bibliography = {}
-config.macros.bibliography.handler = function(place, macroName, params) {
-    var tiddlystr = ""
-    for(var k in bibtexparser.entries) {
-	var entry = bibtexparser.entries[k]
-	if(entry["KEY"] !== undefined) {
-	    tiddlystr += ";" + entry["KEY"] + "\n"
-	    tiddlystr += ":{{bibtexdummycss{" + template.tiddlyfy(entry) + "}}}\n"
+config.macros.bibliography = {
+    handler: function(place, macroName, params) {
+	var tiddlystr = ""
+	for(var k in plugin.bibtexparser.entries) {
+	    var entry = plugin.bibtexparser.entries[k]
+	    if(entry["KEY"] !== undefined) {
+		tiddlystr += ";\"\"\"" + entry["KEY"] + "\"\"\"\n"
+		tiddlystr += ":{{bibtexdummycss{" + plugin.template.tiddlyfy(entry) + "}}}\n"
+	    }
 	}
+	wikify(tiddlystr, place)
     }
-    wikify(tiddlystr, place)
 }
