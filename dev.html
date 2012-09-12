@@ -44,7 +44,7 @@ DAMAGE.
 <!--}}}-->
 
 <!--PRE-HEAD-END-->
-<title> Development TiddlyWiki -  </title>
+<title> BibTeXPlugin TiddlyWiki - plug-in development document </title>
 <style id="styleArea" type="text/css">
 #saveTest {display:none;}
 #messageArea {display:none;}
@@ -506,49 +506,642 @@ noscript {display:none;} /* Fixes a feature in Firefox 1.5.0.2 where print previ
 </div></div>
 <!--POST-SHADOWAREA-->
 <div id="storeArea">
-<div title="BibTeXPluginFilename" creator="YourName" modifier="YourName" created="201209110513" modified="201209110524" changecount="2">
-<pre>/home/jon/Dokumenter/doktorgrad/artikler/database.bib</pre>
+<div title="BibTeXPlugin" creator="YourName" modifier="JonØyvindKjellman" created="201209111048" modified="201209120448" tags="systemConfig" changecount="51">
+<pre>/***
+|Name         | BibTeXPlugin |h
+|Description  | Plugin for easy integration of BibTeX with TiddlyWiki |
+|Version      | 0.9 (beta) |
+|Date         | 2012-09-12 |
+|Source       | https://github.com/jonkje/bibtexplugin |
+|Author | Jon Øyvind Kjellman |
+|License | [[MIT|http://opensource.org/licenses/mit-license.php]] |
+|~CoreVersion | 2.6.5 |
+|Browser | Tested on Opera 11.61 and Firefox 15 |
+!!Introduction
+This plugin allows a BibTeX bibliography to be integrated into your TiddlyWiki. It can load the bibliography either from an external //.bib// file or from a tiddler named BibTeXPluginBibliography. Each entry is formatted according to the template in BibTeXPluginTemplate and can be rendered by two different macros. These macros are: &quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex&amp;nbsp;//key//&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot; and &quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibliography&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;.
+!!Loading the bibliography
+The plugin first looks in BibTeXPluginFilename for the location of a BibTeX file. If none is found it will use the content of BibTeXPluginBibliography as source for the bibliography. ''Note!'' loading from local file system is generally disabled in browsers due to security reasons, but can usually be enabled if desired.
+!!!Template syntax
+The plugin renders each entry according to the template in BibTeXPluginTemplate. The syntax for this is quite simple:
+&lt;&lt;&lt;
+* {{{${SOMEKEY} }}}is replaced by the value of //SOMEKEY// (e.g. AUTHOR, TITLE, JOURNAL, etc.)
+* {{{${SOMEKEY?A?B} }}}is a conditional statment:
+** If //SOMEKEY// ''is'' defined then the expression is replaced by //A//
+** If //SOMEKEY// ''is not'' defined then the expression is replaced by //B//
+** Conditionals may be nested (i.e. one inside another)
+* The characters {{{?}}},{{{ {}}},{{{ } }}}and {{{\}}} are special and must be escaped by a backslash (i.e. {{{\?}}},{{{ \{}}},{{{ \} }}}and {{{\\}}}) if they can be interpreted as part of one of the above statements.
+* Any other text is interpreted as TiddlyWiki mark-up.
+&lt;&lt;&lt;
+!!!Style
+The CSS style of the entries rendered with the &quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex //key//&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot; macro can be changed by editing BibTeXPluginStyleSheet. The fundamental HTML structure is:
+&lt;&lt;&lt;
+{{{(&lt;a class=&quot;bibtexhandle&quot;&gt;&lt;span class=&quot;bibtexbox&quot; style=&quot;display: none&quot;&gt; ... BibTeX entry ... &lt;/span&gt;
+BibtexKey&lt;/a&gt;)}}}
+&lt;&lt;&lt;
+!!bibtex macro
+;Usage
+:&quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex //key//&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;
+;Parameters
+://key//: the key of the BibTeX entry you'd like to render.
+;Function
+:Renders a single entry from the BibTeX source. The entry is rendered in a block which visibility is toggled by clicking the entry name.
+!!bibliography macro
+;Usage
+:&quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibliography&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;
+;Function
+:Renders a list of all BibTeX entries in the order they appear in the BibTeX source.
+
+!!DefaultStyleSheet
+a.bibtexhandle { position: relative; }
+a.bibtexhandle span.bibtexbox {
+  display: none;
+  position: absolute;
+  z-index: 10;
+  left: -100%;
+  width: 300%;
+  padding: 5px;
+  border:1px solid [[ColorPalette::SecondaryMid]];
+  background: [[ColorPalette::SecondaryLight]];
+  color:[[ColorPalette::Foreground]]; }
+!!DefaultTemplate
+${AUTHOR}
+//${TITLE}//, ${EDITOR?Editor:&amp;nbsp;${EDITOR}, }${JOURNAL?${JOURNAL}, ?${PUBLISHER,${EDITOR?//}${PUBLISHER}${EDITOR?//}, }} ''${YEAR}''${VOLUME?, vol.&amp;nbsp;${VOLUME}}${CHAPTER?, ch.&amp;nbsp;${CHAPTER}}${PAGES?, pp.&amp;nbsp;${PAGES}}    ${URL?([[online version|${URL}]])}
+!!Code
+***/
+//{{{
+// Plugin namespace
+var plugin = config.extensions.BibTeXPlugin = {}
+//}}}
+/***
+!!!!BibTeX parser code
+Originally released as [[bibtex-js|http://code.google.com/p/bibtex-js/]]. Copyright 2010 Henrik Mühe under the [[MIT license|http://opensource.org/licenses/mit-license.php]].
+***/
+//{{{
+/* Parser issues:
+     - no comment handling within strings
+     - no string concatenation
+     - no variable values yet
+
+   BibTeX grammar implemented here (roughly):
+     bibtex -&gt; (string | preamble | comment | entry)*
+     string -&gt; '@STRING' '{' key_equals_value '}'
+     preamble -&gt; '@PREAMBLE' '{' value '}'
+     comment -&gt; '@COMMENT' '{' value_comment '}'
+     entry -&gt; '@' key '{' key ',' key_value_list '}'
+     key_value_list -&gt; key_equals_value (',' key_equals_value)*
+     key_equals_value -&gt; key '=' value
+     value -&gt; value_quotes | value_braces | key
+     value_comment -&gt; .*? // or something??
+     value_quotes -&gt; '&quot;' .*? '&quot;'; // not quite
+     value_braces -&gt; '{' .*? '&quot;'; // not quite */
+plugin.BibtexParser = function () {
+    this.pos = 0
+    this.input = &quot;&quot;
+    
+    this.entries = {}
+    this.strings = { JAN: &quot;January&quot;,
+	            FEB: &quot;February&quot;,
+	            MAR: &quot;March&quot;,      
+	            APR: &quot;April&quot;,
+	            MAY: &quot;May&quot;,
+	            JUN: &quot;June&quot;,
+	            JUL: &quot;July&quot;,
+	            AUG: &quot;August&quot;,
+	            SEP: &quot;September&quot;,
+	            OCT: &quot;October&quot;,
+	            NOV: &quot;November&quot;,
+	            DEC: &quot;December&quot; }
+    this.currentKey = &quot;&quot;
+    this.currentEntry = &quot;&quot;
+
+    this.isWhitespace = function(s) { return (s == ' ' || s == '\r' || s == '\t' || s == '\n') }
+
+    this.currentIsEscaped = function() {
+	var slashcount = 0
+	for(var	p = this.pos-1; p &gt;= 0; p--) {
+	    if(this.input[p] == '\\') {
+		slashcount++
+	    } else {
+		break
+	    }
+	}
+	return (slashcount % 2 == 1)
+    }
+
+    this.match = function(s) {
+	this.skipWhitespace()
+	if (this.input.substring(this.pos, this.pos+s.length) == s) {
+	    this.pos += s.length
+	} else {
+	    throw &quot;Token mismatch, expected &quot; + s + &quot;, found &quot; + this.input.substring(this.pos)
+	}
+	this.skipWhitespace()
+    }
+
+    this.tryMatch = function(s) {
+	this.skipWhitespace()
+	if (this.input.substring(this.pos, this.pos+s.length) == s) {
+	    return true
+	} else {
+	    return false
+	}
+	this.skipWhitespace()
+    }
+
+    this.skipWhitespace = function() {
+	while (this.isWhitespace(this.input[this.pos])) {
+	    this.pos++
+	}
+	if (this.input[this.pos] == &quot;%&quot;) {
+	    while(this.input[this.pos] != &quot;\n&quot;) {
+		this.pos++
+	    }
+	    this.skipWhitespace()
+	}
+    }
+
+    this.value_comment = function() {
+	var bracecount = 0
+	var start = this.pos
+	while(true) {
+	    if (this.input[this.pos] == '}' &amp;&amp; !this.currentIsEscaped()) {
+		if (bracecount &gt; 0) {
+		    bracecount--
+		} else {
+		    var end = this.pos
+		    return this.input.substring(start, end)
+		}
+	    } else if (this.input[this.pos] == '{' &amp;&amp; !this.currentIsEscaped()) {
+		bracecount++
+	    } else if (this.pos == this.input.length-1) {
+		throw &quot;Unterminated value&quot;
+	    }
+	    this.pos++
+	}
+    }
+
+    this.value_braces = function() {
+	this.match(&quot;{&quot;)
+	var val = this.value_comment()
+	this.match(&quot;}&quot;)
+	return val
+    }
+
+    this.value_quotes = function() {
+	this.match('&quot;')
+	var val = this.value_comment()
+	this.match('&quot;')
+	return val
+    }
+    
+    this.single_value = function() {
+	var start = this.pos
+	if (this.tryMatch(&quot;{&quot;)) {
+	    return this.value_braces()
+	} else if (this.tryMatch('&quot;')) {
+	    return this.value_quotes()
+	} else {
+	    var k = this.key()
+	    if (this.strings[k.toUpperCase()]) {
+		return this.strings[k]
+	    } else if (k.match(&quot;^[0-9]+$&quot;)) {
+		return k
+	    } else {
+		throw &quot;Value expected:&quot; + this.input.substring(start)
+	    }
+	}
+    }
+    
+    this.value = function() {
+	var values = []
+	values.push(this.single_value())
+	while (this.tryMatch(&quot;#&quot;)) {
+	    this.match(&quot;#&quot;)
+	    values.push(this.single_value())
+	}
+	return values.join(&quot;&quot;)
+    }
+
+    this.key = function() {
+	var start = this.pos
+	while(true) {
+	    if (this.pos == this.input.length) {
+		throw &quot;Runaway key&quot;
+	    }
+	    
+	    if (this.input[this.pos].match(&quot;[a-zA-Z0-9_:\\./-]&quot;)) {
+		this.pos++
+	    } else {
+		return this.input.substring(start, this.pos).toUpperCase()
+	    }
+	}
+    }
+
+    this.key_equals_value = function() {
+	var key = this.key()
+	if (this.tryMatch(&quot;=&quot;)) {
+	    this.match(&quot;=&quot;)
+	    var val = this.value()
+	    return [ key, val ]
+	} else {
+	    throw &quot;... = value expected, equals sign missing:&quot; + this.input.substring(this.pos)
+	}
+    }
+
+    this.key_value_list = function() {
+	this.entries[this.currentEntry][&quot;KEY&quot;] = this.currentEntry
+	var kv = this.key_equals_value()
+	this.entries[this.currentEntry][kv[0]] = kv[1]
+	while (this.tryMatch(&quot;,&quot;)) {
+	    this.match(&quot;,&quot;)
+	    if (this.tryMatch(&quot;}&quot;)) {
+		break
+	    }
+	    kv = this.key_equals_value()
+	    this.entries[this.currentEntry][kv[0]] = kv[1]
+	}
+    }
+
+    this.entry_body = function() {
+	this.currentEntry = this.key()
+	this.entries[this.currentEntry] = new Object();    
+	this.match(&quot;,&quot;)
+	this.key_value_list()
+    }
+
+    this.directive = function () {
+	this.match(&quot;@&quot;)
+	return &quot;@&quot;+this.key()
+    }
+
+    this.string = function () {
+	var kv = this.key_equals_value()
+	this.strings[kv[0].toUpperCase()] = kv[1]
+    }
+
+    this.preamble = function() {
+	this.value()
+    }
+
+    this.comment = function() {
+	this.value_comment()
+    }
+
+    this.entry = function() {
+	this.entry_body()
+    }
+
+    this.bibtex = function() {
+	while(this.tryMatch(&quot;@&quot;)) {
+	    var d = this.directive().toUpperCase()
+	    this.match(&quot;{&quot;)
+	    if (d == &quot;@STRING&quot;) {
+		this.string()
+	    } else if (d == &quot;@PREAMBLE&quot;) {
+		this.preamble()
+	    } else if (d == &quot;@COMMENT&quot;) {
+		this.comment()
+	    } else {
+		this.entry()
+	    }
+	    this.match(&quot;}&quot;)
+	}
+    }
+}
+//}}}
+/***
+!!!!Template parser
+***/
+//{{{
+plugin.Template = function(template_str) {
+    this.StringElement = function(str, next) {
+	this.str  = typeof str  === undefined ? &quot;&quot; : str
+	this.next = typeof next === undefined ? null : next
+              this.str = this.str.replace(/\\([\\?\{\}])/g, &quot;$1&quot;)
+    }
+
+    this.KeyElement = function(key, next) {
+	this.key  = key
+	this.next = typeof next === undefined ? null : next
+    }
+
+    this.ConditionalElement = function(condition, next_exist, next_noexist) {
+	this.condition    = condition
+	this.next_exist   = next_exist
+	this.next_noexist = next_noexist
+    }
+
+    this.isEscaped = function(str, pos) {
+	var slashcount = 0
+	while(--pos &gt;= 0) {
+	    if(str[pos] == '\\') {
+		slashcount++
+	    } else {
+		break
+	    }
+	}
+	return slashcount &gt; 0 &amp;&amp; slashcount % 2 == 1
+    }
+
+    // Parses a template string recursively, returning a chain of
+    // elements (Key, String and/or Conditional) with the last
+    // element(s) linking to tail.
+    this.parseString = function(str, tail) {
+	var prefix = null
+	
+	// For proper handling of empty strings in conditionals.
+	if(str === &quot;&quot; &amp;&amp; tail !== null) { return new this.StringElement(&quot;&quot;, tail) }
+	
+	// Prefix string
+	for(var parsepos = 0; true; parsepos++) {
+	    if(str[parsepos] == '$' &amp;&amp; str[parsepos+1] == '{' &amp;&amp; !this.isEscaped(str, parsepos)) {
+		if(parsepos &gt; 0) {
+		    prefix = new this.StringElement(str.substring(0, parsepos), tail)
+		}
+		break
+	    }
+	    
+	    // End of string, it must be a pure text string!
+	    if(parsepos &gt;= str.length-3) { return new this.StringElement(str, tail) }
+	}
+
+	// Find element delimiters (',' and '}')
+	parsepos += 2
+	var sepcnt = 0
+	var seppos   = new Array()
+	var bracketcnt = 1
+	var startpos   = parsepos
+	var endpos     = 0
+	
+	// Find commas and end of statement
+	for(; parsepos &lt; str.length; parsepos++) {
+	    if(str[parsepos] == '{' &amp;&amp; !this.isEscaped(str, parsepos)) {
+		bracketcnt++
+	    } else if(str[parsepos] == '}' &amp;&amp; !this.isEscaped(str, parsepos)) {
+		if(--bracketcnt == 0) {
+		    endpos = parsepos
+		    parsepos++
+		    break
+		}
+	    } else if(str[parsepos] == '?' &amp;&amp; !this.isEscaped(str, parsepos) &amp;&amp; bracketcnt == 1) {
+		seppos[sepcnt] = parsepos
+		if(++sepcnt &gt; 2) {
+		    return new this.StringElement(&quot;Template parse error! (Too many '|' separators)&quot;, tail)
+		}
+	    }
+	}
+	
+	// Check that the element is complete.
+	if(bracketcnt != 0) { return new this.StringElement(&quot;Template parse error! (Unmatched bracket)&quot;, tail) }
+	
+	// Parse tail of current string
+	var innertail = this.parseString(str.substring(endpos+1), tail)
+	
+	var first_element
+	
+	switch(sepcnt) {
+	case 0:
+	    first_element = new this.KeyElement(str.substring(startpos, endpos), innertail)
+	    break
+	case 1:
+	    var cond_element = this.parseString(str.substring(seppos[0]+1, endpos), innertail)
+	    first_element = new this.ConditionalElement(str.substring(startpos, seppos[0]).toUpperCase(),
+							cond_element,
+							innertail)
+	    break
+	case 2:
+ 	    var cond_element1 = this.parseString(str.substring(seppos[0]+1, seppos[1]), innertail)
+	    var cond_element2 = this.parseString(str.substring(seppos[1]+1, endpos), innertail)
+	    first_element = new this.ConditionalElement(str.substring(startpos, seppos[0]).toUpperCase(),
+							cond_element1, cond_element2)
+	}
+	
+	if(prefix == null) {
+	    return first_element
+	} else {
+	    prefix.next = first_element
+	    return prefix
+	}
+    }
+    
+    this.template_head = null
+    
+    this.parseTemplate = function(template_str) {	
+	this.template_head = this.parseString(template_str, null)
+	if(this.template_head === null) {
+	    this.template_head = new this.StringElement(&quot;&quot;)
+	}
+    }
+    
+    this.parseTemplate(template_str)
+}
+
+plugin.Template.prototype.tiddlyfy = function(entry) {
+    var rtrn_str = &quot;&quot;
+    var e = this.template_head
+    do {
+	if(e instanceof this.StringElement) {
+	    rtrn_str += e.str
+	    e = e.next
+	} else if(e instanceof this.KeyElement) {
+	    var val = entry[e.key]
+	    if(e.key === &quot;URL&quot;) {
+		rtrn_str += val
+	    } else {
+		rtrn_str += val !== undefined ? &quot;\&quot;\&quot;\&quot;&quot; + val + &quot;\&quot;\&quot;\&quot;&quot; : &quot;&quot;
+	    }
+	    e = e.next
+	} else if(e instanceof this.ConditionalElement) {
+	    var val = entry[e.condition]
+	    e = val !== undefined ? e.next_exist : e.next_noexist
+	}
+    } while(e != null)
+    
+    return rtrn_str
+}
+//}}}
+/***
+!!!!Glue and set-up
+***/
+//{{{
+var no_setup_yet = true // Ensure setup is only run once
+
+plugin.loadTemplate = function() {
+    if(!no_setup_yet) {
+             plugin.template = new plugin.Template(store.getTiddlerText(&quot;BibTeXPluginTemplate&quot;))
+    }
+}
+
+plugin.loadBibliography = function() {
+    if(no_setup_yet) { return }
+
+    // Load bibliography from external file
+    var bibfilename = store.getTiddlerText(&quot;BibTeXPluginFilename&quot;)
+    var bibdata = &quot;&quot;
+    if(bibfilename !== &quot;&quot;) {
+	jQuery.ajax({url: bibfilename,
+		     success: function(data) { bibdata = data; },
+		     async: false })
+    }
+    if(bibdata == &quot;&quot;) {
+	bibdata = store.getTiddlerText(&quot;BibTeXPluginBibliography&quot;)
+    }
+    
+    plugin.bibtexparser = new plugin.BibtexParser()
+    plugin.bibtexparser.input = bibdata
+    plugin.bibtexparser.bibtex()
+}
+
+// Set-up shadow tiddlers
+config.shadowTiddlers[&quot;BibTeXPluginStyleSheet&quot;]
+    = &quot;/*{{{*/\n%0\n/*}}}*/&quot;.format(store.getTiddlerText(tiddler.title + &quot;##DefaultStyleSheet&quot;))
+store.addNotification(&quot;BibTeXPluginStyleSheet&quot;, refreshStyles)
+
+config.shadowTiddlers[&quot;BibTeXPluginTemplate&quot;]
+    = store.getTiddlerText(tiddler.title + &quot;##DefaultTemplate&quot;)
+store.addNotification(&quot;BibTeXPluginTemplate&quot;, plugin.loadTemplate)
+
+config.shadowTiddlers[&quot;BibTeXPluginFilename&quot;] = &quot;&quot;
+store.addNotification(&quot;BibTeXPluginFilename&quot;, plugin.loadBibliography)
+config.shadowTiddlers[&quot;BibTeXPluginBibliography&quot;] = &quot;&quot;
+store.addNotification(&quot;BibTeXPluginBibliography&quot;, plugin.loadBibliography)
+
+no_setup_yet = false
+plugin.loadTemplate()
+plugin.loadBibliography()
+//}}}
+/***
+!!!!Macros
+***/
+//{{{
+config.macros.bibtex = {
+    handler: function(place, macroName, params) {
+	var entry = plugin.bibtexparser.entries[params[0].toUpperCase()]
+	var tiddlystr = entry !== undefined ? plugin.template.tiddlyfy(entry) : &quot;No such entry in bibliography!&quot;
+	var citea     = createTiddlyElement(place, &quot;a&quot;, null, &quot;bibtexhandle&quot;, &quot;(&quot;+params[0]+&quot;)&quot;)
+	var citespan  = createTiddlyElement(citea, &quot;span&quot;, null, &quot;bibtexbox&quot;)
+	wikify(tiddlystr, citespan)
+
+	citea.onclick = function() { citespan.style.display = citespan.style.display !== &quot;block&quot; ? &quot;block&quot; : &quot;none&quot; }
+	citespan.onclick = function() { this.style.display = &quot;none&quot; }
+    }
+}
+
+config.macros.bibliography = {
+    handler: function(place, macroName, params) {
+	var tiddlystr = &quot;&quot;
+	for(var k in plugin.bibtexparser.entries) {
+	    var entry = plugin.bibtexparser.entries[k]
+	    if(entry[&quot;KEY&quot;] !== undefined) {
+		tiddlystr += &quot;;\&quot;\&quot;\&quot;&quot; + entry[&quot;KEY&quot;] + &quot;\&quot;\&quot;\&quot;\n&quot;
+		tiddlystr += &quot;:{{bibtexdummycss{&quot; + plugin.template.tiddlyfy(entry) + &quot;}}}\n&quot;
+	    }
+	}
+	wikify(tiddlystr, place)
+    }
+}
+//}}}</pre>
 </div>
-<div title="DefaultTiddlers" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" changecount="1">
-<pre>[[Scratch]]</pre>
+<div title="BibTeXPlugin License" creator="YourName" modifier="JonØyvindKjellman" created="201209120250" modified="201209120251" changecount="3">
+<pre>BibTeXPlugin is copyright &amp;copy; 2012 Jon Øyvind Kjellman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</pre>
 </div>
-<div title="ExternalScripts" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090249" changecount="1">
-<pre>./scripts/bibtexplugin.js</pre>
+<div title="BibTeXPluginBibliography" creator="YourName" modifier="YourName" created="201209111132" modified="201209111314" changecount="7">
+<pre>% This is an arbitrary collection references for testing of BibTeXPlugin for TiddlyWiki
+
+@INPROCEEDINGS{Purcell1946,
+  author = {Purcell, E. M.},
+  title = {Spontaneous emission probabilities at radio frequencies},
+  year = {1946},
+  volume = {69},
+  pages = {681+},
+  citeulike-article-id = {2154423},
+  citeulike-linkout-0 = {http://prola.aps.org/pdf/PR/v69/i11-12/p674_2},
+  file = {:./spontaneous emission probabilities at radio frequencies.pdf:PDF},
+  journal = {Physical Review},
+  posted-at = {2007-12-21 08:13:21},
+  priority = {0},
+  url = {http://prola.aps.org/pdf/PR/v69/i11-12/p674_2}
+}
+
+@ARTICLE{Halioua2011,
+  author = {Y. Halioua and A. Bazin and P. Monnier and T. J. Karle and G. Roelkens
+	and I. Sagnes and R. Raj and F. Raineri},
+  title = {Hybrid III-V semiconductor/silicon nanolaser},
+  journal = {Opt. Express},
+  year = {2011},
+  volume = {19},
+  pages = {9221--9231},
+  number = {10},
+  month = {May},
+  crossref = {Karle2010},
+  doi = {10.1364/OE.19.009221},
+  file = {:./hybrid iii-v semiconductor silicon nanolaser.pdf:PDF},
+  keywords = {Lasers; Photonic crystals},
+  publisher = {OSA},
+  url = {http://www.opticsexpress.org/abstract.cfm?URI=oe-19-10-9221}
+}
+
+@INBOOK{Bimberg2008,
+  chapter = {2},
+  pages = {23-52},
+  title = {Optical Fiber Telecommunications V},
+  publisher = {Academic Press},
+  year = {2008},
+  editor = {Ivan P. Kaminow and Tingye Le and Alan E. Willner},
+  author = {Dieter Bimberg},
+  volume = {A},
+  note = {Semiconductor quantum dots: Genesis---The Excitonic Zoo---novel devices
+	for future applications.},
+  isbn = {978-0-12-374171-4},
+}
+
+@ARTICLE{Noda2007,
+  author = {Noda, Susumu and Fujita, Masayuki and Asano, Takashi},
+  title = {Spontaneous-emission control by photonic crystals and nanocavities},
+  journal = {Nat Photon},
+  year = {2007},
+  volume = {1},
+  pages = {449--458},
+  number = {8},
+  month = aug,
+  comment = {10.1038/nphoton.2007.141},
+  file = {:./spontaneous-emission control by photonic crystals and nanocavities.pdf:PDF},
+  issn = {1749-4885},
+  url = {http://dx.doi.org/10.1038/nphoton.2007.141}
+}</pre>
 </div>
-<div title="MarkupPostBody" creator="JonØyvindKjellman" modifier="YourName" created="201208090247" modified="201208300836" changecount="11">
-<pre>&lt;script src=&quot;./scripts/loadExternal.js&quot; language=&quot;javascript&quot; type=&quot;text/javascript&quot;&gt;&lt;/script&gt;</pre>
+<div title="DefaultTiddlers" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209120252" changecount="2">
+<pre>[[Scratch]]
+[[BibTeXPlugin]]
+[[BibTeXPlugin License]]</pre>
 </div>
-<div title="Scratch" creator="JonØyvindKjellman" modifier="YourName" created="201208090243" modified="201209110539" changecount="14">
-<pre>Here's a reference: &lt;&lt;bibtex halioua2011&gt;&gt;
+<div title="MainMenu" creator="YourName" modifier="JonØyvindKjellman" created="201209111248" modified="201209120251" changecount="3">
+<pre>[[Scratch]]
+[[BibTeXPlugin]]
+[[BibTeXPlugin License]]</pre>
+</div>
+<div title="Scratch" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209120435" changecount="20">
+<pre># First reference: &lt;&lt;bibtex halioua2011&gt;&gt;
+# Second reference: &lt;&lt;bibtex Bimberg2008&gt;&gt;
+# The third is in the paragraph below.
+# And this one &lt;&lt;bibtex NoRealEntry2012&gt;&gt; doesn't exist.
 
-And here's anotherone after a little blablablablablablabla &lt;&lt;bibtex Tanaka2008&gt;&gt; Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc ac libero nisl, id lacinia urna. Fusce ante diam, suscipit non aliquam vel, aliquam interdum tortor. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean in enim sit amet velit ultrices fermentum ac a sapien. Proin ac turpis enim. Donec eu venenatis velit. Aliquam et mollis mi.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc ac libero nisl, id lacinia urna. Fusce ante diam, suscipit non aliquam vel, aliquam interdum tortor. Lorem ipsum dolor sit amet, consectetur adipiscing elit (cfr. &lt;&lt;bibtex Purcell1946&gt;&gt;.) Aenean in enim sit amet velit ultrices fermentum ac a sapien. Proin ac turpis enim. Donec eu venenatis velit. Aliquam et mollis mi.
 
-Now at the beginning of the line:
-&lt;&lt;bibtex Bimberg2008&gt;&gt;
-
-No entry
-&lt;&lt;bibtex Noentry2009&gt;&gt;
-
-!! Definition list test
-; Bimberg2008
-: {{foo{Lorem ipsum dolor sit ''amet,''
-consectetur adipiscing __elit.__ //Nunc ac libero nisl.//}}}
-; Foo2009
-: Jadda
-
-Plain text ''&lt;nowiki&gt;No formatting&lt;/nowiki&gt; ... &quot;&quot;&quot;except (hopefully) bold&quot;&quot;&quot;''
-
-!! Complete bibliography
+! Complete bibliography
 &lt;&lt;bibliography&gt;&gt;</pre>
 </div>
-<div title="SiteSubtitle" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090249" changecount="1">
-<pre></pre>
+<div title="SiteSubtitle" creator="JonØyvindKjellman" modifier="YourName" created="201208090249" modified="201209111247" changecount="2">
+<pre>plug-in development document</pre>
 </div>
-<div title="SiteTitle" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090249" changecount="1">
-<pre>Development TiddlyWiki</pre>
-</div>
-<div title="Template" creator="YourName" modifier="YourName" created="201208120423" modified="201208120527" changecount="2">
-<pre>''AUTHOR'' //Title//</pre>
+<div title="SiteTitle" creator="JonØyvindKjellman" modifier="YourName" created="201208090249" modified="201209111247" changecount="2">
+<pre>BibTeXPlugin TiddlyWiki</pre>
 </div>
 </div>
 <!--POST-STOREAREA-->
@@ -10245,7 +10838,7 @@ if(useJavaSaver)
 //]]>
 </script>
 <!--POST-SCRIPT-START-->
-<script src="./scripts/loadExternal.js" language="javascript" type="text/javascript"></script>
+
 <!--POST-SCRIPT-END-->
 </body>
 </html>
