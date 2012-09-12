@@ -1,0 +1,3 @@
+BibTeXPlugin
+------------
+BibTeXPlugin is a TiddlyWiki plugin for integrating BibTeX into your TiddlyWiki documents. It can load the bibliography either from an external .bib file or from a local tiddler. Two macros enable either the whole bibliography to be listed or single items. The formatting can be customized in a template tiddler.
