@@ -506,7 +506,7 @@ noscript {display:none;} /* Fixes a feature in Firefox 1.5.0.2 where print previ
 </div></div>
 <!--POST-SHADOWAREA-->
 <div id="storeArea">
-<div title="BibTeXPlugin" creator="YourName" modifier="JonØyvindKjellman" created="201209111048" modified="201209120448" tags="systemConfig" changecount="51">
+<div title="BibTeXPlugin" creator="YourName" modifier="YourName" created="201209111048" modified="201209120843" tags="systemConfig" changecount="52">
 <pre>/***
 |Name         | BibTeXPlugin |h
 |Description  | Plugin for easy integration of BibTeX with TiddlyWiki |
@@ -565,7 +565,7 @@ a.bibtexhandle span.bibtexbox {
   color:[[ColorPalette::Foreground]]; }
 !!DefaultTemplate
 ${AUTHOR}
-//${TITLE}//, ${EDITOR?Editor:&amp;nbsp;${EDITOR}, }${JOURNAL?${JOURNAL}, ?${PUBLISHER,${EDITOR?//}${PUBLISHER}${EDITOR?//}, }} ''${YEAR}''${VOLUME?, vol.&amp;nbsp;${VOLUME}}${CHAPTER?, ch.&amp;nbsp;${CHAPTER}}${PAGES?, pp.&amp;nbsp;${PAGES}}    ${URL?([[online version|${URL}]])}
+//${TITLE}//${EDITION?, //${EDITION}.&amp;nbsp;ed.//}, ${EDITOR?Editor:&amp;nbsp;${EDITOR}, }${JOURNAL?${JOURNAL}, ?${PUBLISHER,${EDITOR?//}${PUBLISHER}${EDITOR?//}, }} ''${YEAR}''${VOLUME?, vol.&amp;nbsp;${VOLUME}}${CHAPTER?, ch.&amp;nbsp;${CHAPTER}}${PAGES?, pp.&amp;nbsp;${PAGES}}${ISBN?, ${ISBN}}    ${URL?([[online version|${URL}]])}
 !!Code
 ***/
 //{{{
@@ -994,7 +994,7 @@ plugin.loadBibliography = function() {
 
 // Set-up shadow tiddlers
 config.shadowTiddlers[&quot;BibTeXPluginStyleSheet&quot;]
-    = &quot;/*{{{*/\n%0\n/*}}}*/&quot;.format(store.getTiddlerText(tiddler.title + &quot;##DefaultStyleSheet&quot;))
+    = [ &quot;/*{{{*/\n&quot;, store.getTiddlerText(tiddler.title + &quot;##DefaultStyleSheet&quot;), &quot;\n/*}}}*/&quot; ].join(&quot;&quot;)
 store.addNotification(&quot;BibTeXPluginStyleSheet&quot;, refreshStyles)
 
 config.shadowTiddlers[&quot;BibTeXPluginTemplate&quot;]
