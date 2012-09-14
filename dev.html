@@ -506,13 +506,13 @@ noscript {display:none;} /* Fixes a feature in Firefox 1.5.0.2 where print previ
 </div></div>
 <!--POST-SHADOWAREA-->
 <div id="storeArea">
-<div title="BibTeXPlugin" creator="YourName" modifier="YourName" created="201209111048" modified="201209120843" tags="systemConfig" changecount="52">
+<div title="BibTeXPlugin" creator="YourName" modifier="JonØyvindKjellman" created="201209111048" modified="201209140244" tags="systemConfig" changecount="60">
 <pre>/***
 |Name         | BibTeXPlugin |h
 |Description  | Plugin for easy integration of BibTeX with TiddlyWiki |
-|Version      | 0.9 (beta) |
+|Version      | 0.9.1 (beta) |
 |Date         | 2012-09-12 |
-|Source       | https://github.com/jonkje/bibtexplugin |
+|Source       | https://github.com/downloads/jonkje/bibtexplugin/dev.html#BibTeXPlugin |
 |Author | Jon Øyvind Kjellman |
 |License | [[MIT|http://opensource.org/licenses/mit-license.php]] |
 |~CoreVersion | 2.6.5 |
@@ -540,9 +540,12 @@ BibtexKey&lt;/a&gt;)}}}
 &lt;&lt;&lt;
 !!bibtex macro
 ;Usage
-:&quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex //key//&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;
+:&quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex //key// [//inline//]&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;
 ;Parameters
-://key//: the key of the BibTeX entry you'd like to render.
+:{{dummycss{
+*//key//: the key of the BibTeX entry you'd like to render.
+*//inline//: if this keyword is used, the entry will be rendered in-line with the text.
+}}}
 ;Function
 :Renders a single entry from the BibTeX source. The entry is rendered in a block which visibility is toggled by clicking the entry name.
 !!bibliography macro
@@ -1018,12 +1021,14 @@ config.macros.bibtex = {
     handler: function(place, macroName, params) {
 	var entry = plugin.bibtexparser.entries[params[0].toUpperCase()]
 	var tiddlystr = entry !== undefined ? plugin.template.tiddlyfy(entry) : &quot;No such entry in bibliography!&quot;
-	var citea     = createTiddlyElement(place, &quot;a&quot;, null, &quot;bibtexhandle&quot;, &quot;(&quot;+params[0]+&quot;)&quot;)
-	var citespan  = createTiddlyElement(citea, &quot;span&quot;, null, &quot;bibtexbox&quot;)
+              var citetop    = params[1] === &quot;inline&quot; ? place : createTiddlyElement(place, &quot;a&quot;, null, &quot;bibtexhandle&quot;, &quot;(&quot;+params[0]+&quot;)&quot;)
+              var citeclass = params[1] === &quot;inline&quot; ? null : &quot;bibtexbox&quot;
+	var citespan  = createTiddlyElement(citetop, &quot;span&quot;, null, citeclass)
 	wikify(tiddlystr, citespan)
 
-	citea.onclick = function() { citespan.style.display = citespan.style.display !== &quot;block&quot; ? &quot;block&quot; : &quot;none&quot; }
-	citespan.onclick = function() { this.style.display = &quot;none&quot; }
+              if(citetop !== place) {
+                      citetop.onclick = function() { citespan.style.display = citespan.style.display !== &quot;block&quot; ? &quot;block&quot; : &quot;none&quot; }
+              }
     }
 }
 
@@ -1041,6 +1046,16 @@ config.macros.bibliography = {
     }
 }
 //}}}</pre>
+</div>
+<div title="BibTeXPlugin Demo" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209140244" changecount="27">
+<pre>After setting up a [[BibTeX|http://www.bibtex.org]] source in either BibTeXPluginFilename or BibTeXPluginBibliography you can inserte a reference using {{{&lt;&lt;bibtex Purcell1946&gt;&gt;}}}. It will show up like this: &lt;&lt;bibtex Purcell1946&gt;&gt;
+
+You can also insert a reference in-line using {{{&lt;&lt;bibtex Bimberg2006 inline&gt;&gt;}}}:
+&lt;&lt;bibtex Bimberg2008 inline&gt;&gt;
+
+You can also list the complete bibliography with {{{&lt;&lt;bibliography&gt;&gt;}}}.
+! Sample bibliography
+&lt;&lt;bibliography&gt;&gt;</pre>
 </div>
 <div title="BibTeXPlugin License" creator="YourName" modifier="JonØyvindKjellman" created="201209120250" modified="201209120251" changecount="3">
 <pre>BibTeXPlugin is copyright &amp;copy; 2012 Jon Øyvind Kjellman
@@ -1116,26 +1131,15 @@ THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRES
   url = {http://dx.doi.org/10.1038/nphoton.2007.141}
 }</pre>
 </div>
-<div title="DefaultTiddlers" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209120252" changecount="2">
-<pre>[[Scratch]]
+<div title="DefaultTiddlers" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209140215" changecount="3">
+<pre>[[BibTeXPlugin Demo]]
 [[BibTeXPlugin]]
 [[BibTeXPlugin License]]</pre>
 </div>
-<div title="MainMenu" creator="YourName" modifier="JonØyvindKjellman" created="201209111248" modified="201209120251" changecount="3">
-<pre>[[Scratch]]
-[[BibTeXPlugin]]
+<div title="MainMenu" creator="YourName" modifier="JonØyvindKjellman" created="201209111248" modified="201209140215" changecount="5">
+<pre>[[BibTeXPlugin]]
+[[BibTeXPlugin Demo]]
 [[BibTeXPlugin License]]</pre>
-</div>
-<div title="Scratch" creator="JonØyvindKjellman" modifier="JonØyvindKjellman" created="201208090243" modified="201209120435" changecount="20">
-<pre># First reference: &lt;&lt;bibtex halioua2011&gt;&gt;
-# Second reference: &lt;&lt;bibtex Bimberg2008&gt;&gt;
-# The third is in the paragraph below.
-# And this one &lt;&lt;bibtex NoRealEntry2012&gt;&gt; doesn't exist.
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc ac libero nisl, id lacinia urna. Fusce ante diam, suscipit non aliquam vel, aliquam interdum tortor. Lorem ipsum dolor sit amet, consectetur adipiscing elit (cfr. &lt;&lt;bibtex Purcell1946&gt;&gt;.) Aenean in enim sit amet velit ultrices fermentum ac a sapien. Proin ac turpis enim. Donec eu venenatis velit. Aliquam et mollis mi.
-
-! Complete bibliography
-&lt;&lt;bibliography&gt;&gt;</pre>
 </div>
 <div title="SiteSubtitle" creator="JonØyvindKjellman" modifier="YourName" created="201208090249" modified="201209111247" changecount="2">
 <pre>plug-in development document</pre>
