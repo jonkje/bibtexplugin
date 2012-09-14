@@ -506,11 +506,11 @@ noscript {display:none;} /* Fixes a feature in Firefox 1.5.0.2 where print previ
 </div></div>
 <!--POST-SHADOWAREA-->
 <div id="storeArea">
-<div title="BibTeXPlugin" creator="YourName" modifier="JonØyvindKjellman" created="201209111048" modified="201209140244" tags="systemConfig" changecount="60">
+<div title="BibTeXPlugin" creator="YourName" modifier="JonØyvindKjellman" created="201209111048" modified="201209140311" tags="systemConfig" changecount="71">
 <pre>/***
 |Name         | BibTeXPlugin |h
 |Description  | Plugin for easy integration of BibTeX with TiddlyWiki |
-|Version      | 0.9.1 (beta) |
+|Version      | 0.9.2 (beta) |
 |Date         | 2012-09-12 |
 |Source       | https://github.com/downloads/jonkje/bibtexplugin/dev.html#BibTeXPlugin |
 |Author | Jon Øyvind Kjellman |
@@ -543,8 +543,8 @@ BibtexKey&lt;/a&gt;)}}}
 :&quot;&quot;&quot;&lt;&lt;&quot;&quot;&quot;bibtex //key// [//inline//]&quot;&quot;&quot;&gt;&gt;&quot;&quot;&quot;
 ;Parameters
 :{{dummycss{
-*//key//: the key of the BibTeX entry you'd like to render.
-*//inline//: if this keyword is used, the entry will be rendered in-line with the text.
+* //key//: the key of the BibTeX entry you'd like to render.
+* //inline//: if this keyword is used, the entry will be rendered in-line with the text.
 }}}
 ;Function
 :Renders a single entry from the BibTeX source. The entry is rendered in a block which visibility is toggled by clicking the entry name.
@@ -572,6 +572,7 @@ ${AUTHOR}
 !!Code
 ***/
 //{{{
+console.log(&quot;2&quot;)
 // Plugin namespace
 var plugin = config.extensions.BibTeXPlugin = {}
 //}}}
